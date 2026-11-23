@@ -29,6 +29,18 @@ export function TableQRModal({
     try {
       // 1. Thử gọi Backend để cấp mã QR có chữ ký số HMAC bảo mật
       const res = await apiClient.post<any>(`/tables/${tableId}/qr`, { rotate });
+      if (res.success && res.data?.token) {
+        const origin =
+          typeof window !== 'undefined'
+            ? window.location.origin
+            : 'http://localhost:3000';
+        const resolvedTableId = res.data.tableId || tableId;
+        setQrUrl(
+          `${origin}/table/${encodeURIComponent(resolvedTableId)}?t=${encodeURIComponent(res.data.token)}`,
+        );
+        setIsLoading(false);
+        return;
+      }
       if (res.success && res.data?.url) {
         setQrUrl(res.data.url);
         setIsLoading(false);
