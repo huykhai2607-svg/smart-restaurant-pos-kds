@@ -13,7 +13,7 @@ Hệ thống được thiết lập cơ chế **Phân Quyền Vận Hành Nghiê
 | Vai Trò (Role) | Họ & Tên | Email Đăng Nhập | Tên Đăng Nhập | Mật Khẩu | Đường Dẫn Truy Cập | Quyền Hạn & Chức Năng Chính |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Thu Ngân POS** (`cashier`) | **Trần Thị Thu** | `cashier@smartpos.vn` | `cashier` | `123456` | [`/pos`](http://localhost:3000/pos) | Quản lý sơ đồ bàn (Trống/Có khách/Chờ TT), gộp/đổi bàn, in Phiếu Tạm Tính, xuất mã VietQR động, thu tiền mặt (tự tính tiền thừa), giải phóng bàn. |
-| **Đầu Bếp KDS** (`cook`) | **Đội Ngũ Bếp Trung Tâm** | `kitchen@smartpos.vn` | `cook` *(hoặc `kitchen`)* | `123456` | [`/kds`](http://localhost:3000/kds) | Nhận vé realtime (< 50ms), chuông báo âm thanh, đồng hồ Urgency Timer đếm ngược, chuyển trạng thái "Nấu" -> "Xong", kích hoạt trừ kho BOM, chế độ Gom Món (Aggregation). |
+| **Đầu Bếp KDS** (`cook`) | **Đội Ngũ Bếp Trung Tâm** | `kitchen@smartpos.vn` | `kitchen` | `123456` | [`/kds`](http://localhost:3000/kds) | Nhận vé realtime (< 50ms), chuông báo âm thanh, đồng hồ Urgency Timer đếm ngược, chuyển trạng thái "Nấu" -> "Xong", kích hoạt trừ kho BOM, chế độ Gom Món (Aggregation). |
 | **Quản Trị & Kho** (`admin`) | **Nguyễn Văn Minh** | `admin@smartpos.vn` | `admin` | `123456` | [`/admin`](http://localhost:3000/admin) | Cấu hình công thức định lượng BOM từng món, giám sát tồn kho nguyên liệu thời gian thực (3 mức cảnh báo), nhập kho tức thì (+ Nhập Kho), xem nhật ký xuất kho. |
 | **Khách Hàng (Guest)** | *Khách Dùng Bữa* | *(Không cần tài khoản)* | *Khách Quét QR* | *HMAC Token* | [`/table/T-01`](http://localhost:3000/table/T-01) | Xem E-Menu tại bàn, tùy biến món (Size L, Topping, Ghi chú), giỏ hàng tự tính thuế VAT 8%, gửi đơn vào bếp, theo dõi trạng thái món, bấm "Yêu Cầu Thanh Toán". |
 
@@ -26,13 +26,17 @@ Hệ thống được thiết lập cơ chế **Phân Quyền Vận Hành Nghiê
 ## 🚀 2. Hướng Dẫn Cài Đặt & Khởi Chạy Dự Án (Getting Started)
 
 ### 2.1. Yêu Cầu Môi Trường (Prerequisites)
-- **Node.js**: Phiên bản `18.x` hoặc `20.x LTS` (Khuyến nghị `>= 20.0.0`)
+- **Node.js**: Phiên bản `>= 20.9.0` (Khuyến nghị bản **LTS** mới nhất — đã kiểm thử trên Node.js LTS `v26.x`)
 - **Trình quản lý gói**: `npm` (đi kèm Node.js)
 - **Git**
+- **Cơ sở dữ liệu**: Supabase Managed PostgreSQL (hoặc PostgreSQL cục bộ)
+
+> [!NOTE]
+> Trên **Windows PowerShell**, nếu gặp lỗi Execution Policy chặn `npm.ps1`, hãy chạy bằng `npm.cmd` / `npx.cmd` hoặc sử dụng **Command Prompt (`cmd`)**.
 
 ---
 
-### 2.2. Bước 1: Khởi Chạy Backend API (NestJS 12)
+### 2.2. Bước 1: Cấu Hình & Khởi Chạy Backend API (NestJS 12)
 
 Mở cửa sổ Terminal thứ nhất:
 
@@ -40,26 +44,34 @@ Mở cửa sổ Terminal thứ nhất:
 # 1. Di chuyển vào thư mục backend
 cd backend
 
-# 2. Cài đặt các thư viện phụ thuộc
+# 2. Tạo file biến môi trường .env từ mẫu (và điền chuỗi kết nối Supabase PostgreSQL)
+cp .env.example .env
+
+# 3. Cài đặt các thư viện phụ thuộc
 npm install
 
-# 3. Đồng bộ Prisma Client với Cơ sở dữ liệu Supabase PostgreSQL
+# 4. Đẩy Prisma Schema lên Database & sinh Prisma Client
+npx prisma db push
 npx prisma generate
 
-# 4. Khởi chạy Backend Server
+# 5. Nạp dữ liệu mẫu (3 chi nhánh, tài khoản RBAC, sơ đồ bàn, thực đơn, BOM & tồn kho)
+npx prisma db seed
+
+# 6. Khởi chạy Backend Server (chế độ phát triển)
 npm run start:dev
 ```
 
 - **Backend API URL**: `http://localhost:4000/api`
+- **Swagger OpenAPI Docs**: `http://localhost:4000/api/docs`
 - **Socket.io Realtime Server**: `http://localhost:4000`
-- **Kiểm tra trạng thái**: Mở trình duyệt truy cập `http://localhost:4000/api/tables` thấy trả về JSON dữ liệu bàn là Backend đã chạy thành công.
+- **Kiểm tra trạng thái**: Mở trình duyệt truy cập `http://localhost:4000/api/tables` hoặc `http://localhost:4000/api/menu` thấy trả về JSON dữ liệu là Backend đã kết nối Database thành công.
 
-> [!NOTE]
-> Cấu hình file `backend/.env` đã được cấu hình sẵn chuỗi kết nối Supabase PostgreSQL Transaction Pooler và JWT Secret, không cần chỉnh sửa thêm.
+> [!IMPORTANT]
+> File `backend/.env` nằm trong `.gitignore` nên không được commit lên Git. Khi clone dự án về máy mới hoặc đổi project Supabase, cần cấu hình đủ `DATABASE_URL` (Transaction Pooler cổng `6543` kèm `?pgbouncer=true`), `DIRECT_URL` (Session Pooler cổng `5432`), `JWT_SECRET`, `TABLE_QR_SECRET`, `CORS_ORIGIN` và `FRONTEND_URL` (xem mẫu trong `backend/.env.example`).
 
 ---
 
-### 2.3. Bước 2: Khởi Chạy Frontend WebApp (Next.js 16)
+### 2.3. Bước 2: Cấu Hình & Khởi Chạy Frontend WebApp (Next.js 16)
 
 Mở cửa sổ Terminal thứ hai:
 
@@ -67,15 +79,29 @@ Mở cửa sổ Terminal thứ hai:
 # 1. Di chuyển vào thư mục frontend
 cd frontend
 
-# 2. Cài đặt thư viện dependencies
+# 2. (Tuỳ chọn) Tạo file .env.local nếu cần đổi địa chỉ Backend
+# NEXT_PUBLIC_API_URL=http://localhost:4000/api
+# NEXT_PUBLIC_SOCKET_URL=http://localhost:4000
+
+# 3. Cài đặt thư viện dependencies
 npm install
 
-# 3. Khởi chạy Next.js Development Server
+# 4. Khởi chạy Next.js Development Server
 npm run dev
 ```
 
 - **Frontend App URL**: `http://localhost:3000`
 - **Cổng Đăng Nhập**: `http://localhost:3000/login`
+
+---
+
+### 2.4. (Tuỳ Chọn) Khởi Chạy Bằng Docker Compose
+
+Nếu máy đã cài Docker Desktop, có thể khởi chạy đồng thời cả Backend và Frontend từ thư mục gốc:
+
+```bash
+docker compose up --build
+```
 
 ---
 
