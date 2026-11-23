@@ -10,9 +10,13 @@ describe('InventoryService', () => {
     branch: { findUnique: jest.Mock };
     inventoryAuditLog: { findFirst: jest.Mock };
     orderItem: { findUnique: jest.Mock };
+    product: { findMany: jest.Mock; update: jest.Mock };
     $transaction: jest.Mock;
   };
-  let eventsGateway: { emitLowStockAlert: jest.Mock };
+  let eventsGateway: {
+    emitLowStockAlert: jest.Mock;
+    emitMenuAvailabilityUpdated: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -20,9 +24,13 @@ describe('InventoryService', () => {
       branch: { findUnique: jest.fn() },
       inventoryAuditLog: { findFirst: jest.fn() },
       orderItem: { findUnique: jest.fn() },
+      product: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
       $transaction: jest.fn(),
     };
-    eventsGateway = { emitLowStockAlert: jest.fn() };
+    eventsGateway = {
+      emitLowStockAlert: jest.fn(),
+      emitMenuAvailabilityUpdated: jest.fn(),
+    };
     service = new InventoryService(
       prisma as unknown as PrismaService,
       eventsGateway as unknown as EventsGateway,
@@ -232,5 +240,41 @@ describe('InventoryService', () => {
     await expect(
       service.restock({ branchId: 'bad-branch', items: [] }),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should auto-lock product as out of stock and emit socket event when ingredient reaches 0', async () => {
+    prisma.product.findMany.mockResolvedValue([
+      {
+        id: 'menu-4',
+        name: 'Salad Cá Hồi Nauy Sốt Chanh Dây',
+        isAvailable: true,
+        recipes: [
+          {
+            ingredientId: 'ing-9',
+            amountNeeded: '80',
+            ingredient: { name: 'Cá hồi Na Uy phi lê tươi', baseUnit: 'g' },
+          },
+        ],
+      },
+    ]);
+    prisma.inventory.findMany.mockResolvedValue([
+      { branchId: 'branch-1', ingredientId: 'ing-9', currentStock: '0' },
+    ]);
+
+    const updates = await service.syncProductsAvailabilityForIngredients('branch-1', ['ing-9']);
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      productId: 'menu-4',
+      isAvailable: false,
+    });
+    expect(prisma.product.update).toHaveBeenCalledWith({
+      where: { id: 'menu-4' },
+      data: { isAvailable: false },
+    });
+    expect(eventsGateway.emitMenuAvailabilityUpdated).toHaveBeenCalledWith({
+      branchId: 'branch-1',
+      updates,
+    });
   });
 });

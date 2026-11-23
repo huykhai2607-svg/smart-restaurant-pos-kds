@@ -16,6 +16,7 @@ import type { AuthUser } from '../../common/interfaces/auth.interface';
 import { TablesService } from './tables.service';
 import { TransferTableDto } from './dto/transfer-table.dto';
 import { MergeTableDto } from './dto/merge-table.dto';
+import { SplitTableDto } from './dto/split-table.dto';
 import { UpdateTableStatusDto } from './dto/update-table-status.dto';
 
 @ApiTags('2. Tables (Quản lý Sơ đồ Bàn)')
@@ -62,6 +63,15 @@ export class TablesController {
   @Roles(Role.ADMIN, Role.MANAGER, Role.CASHIER)
   mergeTable(@Body() dto: MergeTableDto, @CurrentUser() user: AuthUser) {
     return this.tablesService.mergeTable(dto, user);
+  }
+
+  /** Tách 1 hoặc nhiều món từ bàn A sang bàn B trống */
+  @ApiOperation({ summary: 'Tách các món được chọn từ Bàn A sang Bàn B trống thành hóa đơn riêng' })
+  @ApiBearerAuth('JWT-auth')
+  @Post('split')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.CASHIER)
+  splitTable(@Body() dto: SplitTableDto, @CurrentUser() user: AuthUser) {
+    return this.tablesService.splitTable(dto, user);
   }
 
   /** Cập nhật thủ công trạng thái bàn (trống / có khách / đặt trước) */

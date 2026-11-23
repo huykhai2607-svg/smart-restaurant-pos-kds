@@ -207,7 +207,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`branch_${branchId}`).emit('inventory:low_stock', payload);
   }
 
-  /** Phát sự kiện thay đổi trạng thái bàn (chuyển bàn, gộp bàn, cập nhật status) */
+  /** Phát sự kiện thay đổi trạng thái bàn (chuyển bàn, gộp bàn, tách bàn, cập nhật status) */
   emitTableUpdated(payload: {
     branchId: string;
     tableId: string;
@@ -218,6 +218,26 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`pos_${branchId}`).emit('table:updated', payload);
     this.server.to(`branch_${branchId}`).emit('table:updated', payload);
     this.server.to(`table_${tableId}`).emit('table:updated', payload);
+  }
+
+  /** Phát sự kiện khóa/mở khóa món ăn trên E-Menu (Realtime khi nguyên liệu BOM về 0 hoặc nhập kho) */
+  emitMenuAvailabilityUpdated(payload: {
+    branchId: string;
+    updates: Array<{
+      productId: string;
+      productName: string;
+      isAvailable: boolean;
+      reason?: string;
+    }>;
+  }) {
+    const { branchId, updates } = payload;
+    this.logger.log(
+      `📢 emitMenuAvailabilityUpdated -> Branch: ${branchId}, Updates: ${updates.map((u) => `${u.productName}=${u.isAvailable ? 'AVAILABLE' : 'SOLD_OUT'}`).join(', ')}`,
+    );
+    this.server.to(`branch_${branchId}`).emit('menu:availability_updated', payload);
+    this.server.to(`pos_${branchId}`).emit('menu:availability_updated', payload);
+    // Phát toàn cục để tất cả các máy khách đang mở /table/[id] nhận ngay lập tức
+    this.server.emit('menu:availability_updated', payload);
   }
 }
 

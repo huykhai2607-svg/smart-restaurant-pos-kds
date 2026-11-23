@@ -207,7 +207,7 @@ async function main() {
     { id: 'ing-6', name: 'Nước dùng phở bò truyền thống', baseUnit: 'ml', stock: 6000, min: 2000, price: 40, sup: 'Bếp hầm xương 24h' },
     { id: 'ing-7', name: 'Tôm sú tươi lột vỏ', baseUnit: 'g', stock: 1200, min: 600, price: 220, sup: 'Hải sản Cần Giờ' },
     { id: 'ing-8', name: 'Cơm thơm ST25 dẻo', baseUnit: 'g', stock: 4500, min: 1500, price: 25, sup: 'Gạo ST25 Sóc Trăng' },
-    { id: 'ing-9', name: 'Cá hồi Na Uy phi lê tươi', baseUnit: 'g', stock: 450, min: 500, price: 420, sup: 'Salmar Seafood Norway' }, // Cảnh báo đỏ tồn kho
+    { id: 'ing-9', name: 'Cá hồi Na Uy phi lê tươi', baseUnit: 'g', stock: 130, min: 500, price: 420, sup: 'Salmar Seafood Norway' }, // 130g = vừa đủ 1 suất Salad (80g) + 1 Topping cá hồi (50g) -> Về 0 để demo khóa Hết hàng!
     { id: 'ing-10', name: 'Rau xà lách Romaine sạch', baseUnit: 'g', stock: 1800, min: 800, price: 50, sup: 'Đà Lạt Gap Farm' },
     { id: 'ing-11', name: 'Sốt chanh dây đặc chế', baseUnit: 'ml', stock: 950, min: 400, price: 70, sup: 'Bếp lạnh chi nhánh 1' },
     { id: 'ing-12', name: 'Cà phê Robusta Đắk Lắk hảo hạng', baseUnit: 'g', stock: 3000, min: 1000, price: 120, sup: 'Nông trại Buôn Ma Thuột' },

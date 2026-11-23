@@ -17,6 +17,7 @@ import {
   Printer,
   QrCode,
   ShoppingBag,
+  Split,
   User,
   X,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ export default function POSCashierPage() {
     menuItems,
     addItemsToOrder,
     changeOrMergeTable,
+    splitTable,
     processPayment,
     currentBranchPaymentRequests,
     clearPaymentRequest,
@@ -60,12 +62,16 @@ export default function POSCashierPage() {
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
   const [isAddDishModalOpen, setIsAddDishModalOpen] = useState(false);
   const [isChangeTableModalOpen, setIsChangeTableModalOpen] = useState(false);
+  const [isSplitTableModalOpen, setIsSplitTableModalOpen] = useState(false);
 
   // Form states
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [cashGiven, setCashGiven] = useState<number>(0);
   const [targetTableId, setTargetTableId] = useState<string>('');
   const [tableActionType, setTableActionType] = useState<'change' | 'merge'>('change');
+  const [splitTargetTableId, setSplitTargetTableId] = useState<string>('');
+  const [selectedSplitItemIds, setSelectedSplitItemIds] = useState<string[]>([]);
+  const [isSplitting, setIsSplitting] = useState(false);
 
   // Chuyển hướng nếu chưa đăng nhập
   useEffect(() => {
@@ -324,7 +330,7 @@ export default function POSCashierPage() {
               </button>
             </div>
 
-            {/* Nút Chuyển / Gộp bàn */}
+            {/* Nút Chuyển / Tách / Gộp bàn */}
             <div className="flex gap-1">
               <button
                 onClick={() => {
@@ -336,6 +342,19 @@ export default function POSCashierPage() {
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Đổi Bàn</span>
+              </button>
+              <button
+                onClick={() => {
+                  setSplitTargetTableId('');
+                  setSelectedSplitItemIds([]);
+                  setIsSplitTableModalOpen(true);
+                }}
+                disabled={!activeOrder || activeOrder.items.length === 0}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-amber-300 text-xs font-semibold flex items-center gap-1 border border-amber-500/30 transition-colors cursor-pointer"
+                title="Tách món từ bàn đang chọn sang bàn trống khác"
+              >
+                <Split className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tách Bàn</span>
               </button>
               <button
                 onClick={() => {
@@ -760,6 +779,137 @@ export default function POSCashierPage() {
                 className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold"
               >
                 Xác Nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tách Bàn (Split Table) */}
+      {isSplitTableModalOpen && selectedTable && activeOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-5 shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+              <div>
+                <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
+                  <Split className="w-4 h-4 text-amber-400" />
+                  Tách Bàn Ăn (Tách Hóa Đơn)
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Từ Bàn: <strong className="text-amber-400">{selectedTable.number}</strong> ({selectedTable.displayName})
+                </p>
+              </div>
+              <button
+                onClick={() => setIsSplitTableModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-xs text-slate-300 font-semibold block mb-1.5">
+                1. Chọn các món cần tách sang bàn mới ({selectedSplitItemIds.length}/{activeOrder.items.length} món):
+              </label>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {activeOrder.items.map((item) => {
+                  const checked = selectedSplitItemIds.includes(item.id);
+                  return (
+                    <label
+                      key={item.id}
+                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-colors ${
+                        checked
+                          ? 'bg-amber-500/15 border-amber-500/50 text-white'
+                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedSplitItemIds((prev) =>
+                              prev.includes(item.id)
+                                ? prev.filter((id) => id !== item.id)
+                                : [...prev, item.id],
+                            );
+                          }}
+                          className="accent-amber-500 w-4 h-4 rounded"
+                        />
+                        <div>
+                          <span className="font-bold text-amber-400 mr-1">{item.quantity}x</span>
+                          <span className="font-semibold">{item.name}</span>
+                          {item.selectedToppings && item.selectedToppings.length > 0 && (
+                            <p className="text-[10px] text-slate-400">
+                              + {item.selectedToppings.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-slate-200">
+                        {(item.price * item.quantity).toLocaleString('vi-VN')} đ
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs text-slate-300 font-semibold block mb-1.5">
+                2. Chọn bàn đích (đang trống):
+              </label>
+              <select
+                value={splitTargetTableId}
+                onChange={(e) => setSplitTargetTableId(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
+              >
+                <option value="">-- Chọn bàn trống để tách sang --</option>
+                {currentBranchTables
+                  .filter((t) => t.id !== selectedTable.id && t.status === 'available')
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.number} - {t.displayName} (Trống • {t.capacity} chỗ)
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={() => setIsSplitTableModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold"
+              >
+                Hủy
+              </button>
+              <button
+                disabled={isSplitting || selectedSplitItemIds.length === 0 || !splitTargetTableId}
+                onClick={async () => {
+                  if (!splitTargetTableId) {
+                    alert('Vui lòng chọn bàn đích trống!');
+                    return;
+                  }
+                  if (selectedSplitItemIds.length === 0) {
+                    alert('Vui lòng chọn ít nhất 1 món để tách bàn!');
+                    return;
+                  }
+                  setIsSplitting(true);
+                  try {
+                    await splitTable(selectedTable.id, splitTargetTableId, selectedSplitItemIds);
+                    const dest = currentBranchTables.find((t) => t.id === splitTargetTableId);
+                    setIsSplitTableModalOpen(false);
+                    alert(
+                      `✅ Đã tách ${selectedSplitItemIds.length} món từ Bàn ${selectedTable.number} sang Bàn ${dest?.number || ''} thành công!`,
+                    );
+                  } catch (err: any) {
+                    alert(err?.message || 'Lỗi tách bàn');
+                  } finally {
+                    setIsSplitting(false);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-black transition-colors cursor-pointer"
+              >
+                {isSplitting ? 'Đang Tách...' : `Xác Nhận Tách (${selectedSplitItemIds.length} món)`}
               </button>
             </div>
           </div>

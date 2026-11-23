@@ -248,7 +248,6 @@ export default function TableOrderPage() {
   };
 
   const filteredMenu = menuItems.filter((item) => {
-    if (!item.isAvailable) return false;
     const matchCategory =
       selectedCategory === 'all' ||
       (selectedCategory === 'hot' && item.station === 'hot') ||
@@ -497,11 +496,19 @@ export default function TableOrderPage() {
                 {filteredMenu.map((dish) => {
                   const stationBadge = STATION_BADGE[dish.station];
                   const inCart = cart.reduce((s, c) => c.menuItem.id === dish.id ? s + c.quantity : s, 0);
+                  const isSoldOut = !dish.isAvailable;
                   return (
                     <div
                       key={dish.id}
-                      onClick={() => openCustomModal(dish)}
-                      className="flex gap-3.5 p-3.5 rounded-3xl bg-slate-900/80 border border-slate-800/60 hover:border-slate-700/80 transition-all cursor-pointer group active:scale-[0.985] shadow-lg"
+                      onClick={() => {
+                        if (!isSoldOut) openCustomModal(dish);
+                      }}
+                      aria-disabled={isSoldOut}
+                      className={`flex gap-3.5 p-3.5 rounded-3xl border transition-all shadow-lg ${
+                        isSoldOut
+                          ? 'bg-slate-900/40 border-rose-500/30 opacity-65 cursor-not-allowed'
+                          : 'bg-slate-900/80 border-slate-800/60 hover:border-slate-700/80 cursor-pointer group active:scale-[0.985]'
+                      }`}
                     >
                       {/* Ảnh món */}
                       <div className="relative w-[90px] h-[90px] rounded-2xl overflow-hidden shrink-0 bg-slate-800">
@@ -509,9 +516,18 @@ export default function TableOrderPage() {
                           src={dish.image}
                           alt={dish.name}
                           fill
-                          className="object-cover group-hover:scale-110 transition-transform duration-500"
+                          className={`object-cover transition-transform duration-500 ${
+                            isSoldOut ? 'grayscale contrast-75' : 'group-hover:scale-110'
+                          }`}
                         />
-                        {inCart > 0 && (
+                        {isSoldOut && (
+                          <div className="absolute inset-0 bg-slate-950/65 flex items-center justify-center">
+                            <span className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[10px] font-black tracking-wider uppercase shadow-md">
+                              HẾT HÀNG
+                            </span>
+                          </div>
+                        )}
+                        {!isSoldOut && inCart > 0 && (
                           <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
                             <span className="text-[10px] font-black text-slate-950">{inCart}</span>
                           </div>
@@ -522,7 +538,7 @@ export default function TableOrderPage() {
                       <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                         <div>
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <h4 className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors leading-snug line-clamp-1">
+                            <h4 className={`font-bold text-sm leading-snug line-clamp-1 ${isSoldOut ? 'text-slate-400 line-through' : 'text-white group-hover:text-amber-400 transition-colors'}`}>
                               {dish.name}
                             </h4>
                             <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-lg border ${stationBadge.color}`}>
@@ -532,7 +548,7 @@ export default function TableOrderPage() {
                           <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
                             {dish.description}
                           </p>
-                          {dish.options && (
+                          {dish.options && !isSoldOut && (
                             <div className="flex gap-1 mt-1.5 flex-wrap">
                               {dish.options.sizes && <span className="text-[10px] text-slate-500 bg-slate-800/60 px-1.5 py-0.5 rounded-md">Chọn size</span>}
                               {dish.options.spicyLevels && <span className="text-[10px] text-slate-500 bg-slate-800/60 px-1.5 py-0.5 rounded-md">Chọn cay</span>}
@@ -542,14 +558,20 @@ export default function TableOrderPage() {
                         </div>
 
                         <div className="flex items-center justify-between mt-2">
-                          <span className="font-black text-amber-400 text-base">
+                          <span className={`font-black text-base ${isSoldOut ? 'text-slate-500' : 'text-amber-400'}`}>
                             {dish.price.toLocaleString('vi-VN')}
                             <span className="text-[11px] font-bold ml-0.5">đ</span>
                           </span>
-                          <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold group-hover:bg-amber-500 group-hover:text-slate-950 group-hover:border-amber-500 transition-all">
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Thêm</span>
-                          </div>
+                          {isSoldOut ? (
+                            <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs font-extrabold">
+                              <span>Hết hàng</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold group-hover:bg-amber-500 group-hover:text-slate-950 group-hover:border-amber-500 transition-all">
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Thêm</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

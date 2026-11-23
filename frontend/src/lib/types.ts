@@ -80,8 +80,8 @@ export interface MenuItem {
   bom: BOMItem[]; // Công thức cấu thành
   options?: {
     spicyLevels?: string[];
-    sizes?: { name: string; extraPrice: number }[];
-    toppings?: { name: string; price: number; ingredientId?: string; quantity?: number }[];
+    sizes?: { id?: string; name: string; extraPrice: number }[];
+    toppings?: { id?: string; name: string; price: number; ingredientId?: string; quantity?: number }[];
   };
 }
 

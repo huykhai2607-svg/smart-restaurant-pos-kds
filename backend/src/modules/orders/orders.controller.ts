@@ -84,6 +84,23 @@ export class OrdersController {
   }
 
   /**
+   * Bếp KDS hoàn tất toàn bộ vé order (Batch KDS Complete)
+   * PATCH /api/orders/:orderId/complete-all?stationId=...
+   */
+  @ApiOperation({ summary: 'Đầu bếp KDS hoàn tất toàn bộ vé order & Tự động trừ kho BOM trong 1 Transaction' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiQuery({ name: 'stationId', required: false, example: 'hot' })
+  @Patch('orders/:orderId/complete-all')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.COOK, Role.CASHIER)
+  completeOrderTicket(
+    @Param('orderId') orderId: string,
+    @Query('stationId') stationId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ordersService.completeOrderTicket(orderId, stationId, user);
+  }
+
+  /**
    * Bếp KDS cập nhật trạng thái món (Pending -> Cooking -> Ready -> Served -> Cancelled)
    * PATCH /api/orders/items/:id/status
    */

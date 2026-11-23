@@ -21,13 +21,16 @@ export function VietQRModal({
   tableNumber,
 }: VietQRModalProps) {
   const [copied, setCopied] = useState(false);
+  const [qrImgFailed, setQrImgFailed] = useState(false);
 
   if (!isOpen) return null;
 
+  const bankId = 'MB';
   const bankName = 'MB Bank (Ngân hàng Quân Đội)';
   const accountNumber = '098877665544';
   const accountHolder = 'NHA HANG SMART POS KDS';
   const transferContent = `THANHTOAN ${orderCode} ${tableNumber}`;
+  const vietQrUrl = `https://img.vietqr.io/image/${bankId}-${accountNumber}-compact2.png?amount=${Math.max(0, Math.round(amount))}&addInfo=${encodeURIComponent(transferContent)}&accountName=${encodeURIComponent(accountHolder)}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -64,34 +67,46 @@ export function VietQRModal({
               <span className="text-[10px] font-extrabold text-red-600">napas 247</span>
             </div>
 
-            {/* Simulated QR Code Graphic */}
-            <div className="w-48 h-48 bg-slate-900 rounded-md p-2 flex flex-col justify-between items-center relative overflow-hidden">
-              <div className="w-full flex justify-between">
-                <div className="w-12 h-12 border-4 border-white bg-slate-900 flex items-center justify-center">
-                  <div className="w-5 h-5 bg-white" />
-                </div>
-                <div className="w-12 h-12 border-4 border-white bg-slate-900 flex items-center justify-center">
-                  <div className="w-5 h-5 bg-white" />
-                </div>
+            {/* Mã VietQR động chuẩn Napas 24/7 (tự fallback nếu offline) */}
+            {!qrImgFailed ? (
+              <div className="w-52 h-52 bg-white rounded-md overflow-hidden flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={vietQrUrl}
+                  alt={`VietQR ${orderCode}`}
+                  className="w-full h-full object-contain"
+                  onError={() => setQrImgFailed(true)}
+                />
               </div>
-              
-              {/* Pattern center */}
-              <div className="text-[10px] text-amber-400 font-mono text-center tracking-widest leading-tight">
-                ■ ■ ■ ■ ■ ■<br/>
-                ■ SMART ■ POS ■<br/>
-                ■ ■ {orderCode} ■ ■<br/>
-                ■ ■ ■ ■ ■ ■
-              </div>
+            ) : (
+              <div className="w-48 h-48 bg-slate-900 rounded-md p-2 flex flex-col justify-between items-center relative overflow-hidden">
+                <div className="w-full flex justify-between">
+                  <div className="w-12 h-12 border-4 border-white bg-slate-900 flex items-center justify-center">
+                    <div className="w-5 h-5 bg-white" />
+                  </div>
+                  <div className="w-12 h-12 border-4 border-white bg-slate-900 flex items-center justify-center">
+                    <div className="w-5 h-5 bg-white" />
+                  </div>
+                </div>
 
-              <div className="w-full flex justify-between items-end">
-                <div className="w-12 h-12 border-4 border-white bg-slate-900 flex items-center justify-center">
-                  <div className="w-5 h-5 bg-white" />
+                {/* Pattern center */}
+                <div className="text-[10px] text-amber-400 font-mono text-center tracking-widest leading-tight">
+                  ■ ■ ■ ■ ■ ■<br />
+                  ■ SMART ■ POS ■<br />
+                  ■ ■ {orderCode} ■ ■<br />
+                  ■ ■ ■ ■ ■ ■
                 </div>
-                <div className="px-1.5 py-0.5 bg-amber-400 text-slate-950 font-black text-[9px] rounded">
-                  MB BANK
+
+                <div className="w-full flex justify-between items-end">
+                  <div className="w-12 h-12 border-4 border-white bg-slate-900 flex items-center justify-center">
+                    <div className="w-5 h-5 bg-white" />
+                  </div>
+                  <div className="px-1.5 py-0.5 bg-amber-400 text-slate-950 font-black text-[9px] rounded">
+                    MB BANK
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <p className="text-[11px] font-bold text-slate-700 mt-2">
               Số tiền: <span className="text-emerald-600 font-black text-sm">{amount.toLocaleString('vi-VN')} đ</span>

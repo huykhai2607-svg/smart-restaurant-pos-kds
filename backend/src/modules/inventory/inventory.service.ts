@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,10 +20,123 @@ export interface DeductIngredientRequirement {
 
 @Injectable()
 export class InventoryService {
+  private readonly logger = new Logger(InventoryService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventsGateway: EventsGateway,
   ) {}
+
+  /**
+   * Tự động đồng bộ trạng thái "Hết hàng" / "Còn hàng" cho các món ăn có công thức BOM
+   * liên quan đến danh sách nguyên liệu vừa biến động.
+   * Khi nguyên liệu về 0 (hoặc không đủ định lượng cho 1 suất) -> tự khóa món & phát Socket.io.
+   */
+  async syncProductsAvailabilityForIngredients(
+    branchId: string,
+    ingredientIds: string[],
+  ) {
+    if (!ingredientIds || ingredientIds.length === 0) return [];
+
+    // 1. Tìm tất cả các món ăn sử dụng ít nhất 1 trong các nguyên liệu vừa biến động
+    const affectedProducts = await this.prisma.product.findMany({
+      where: {
+        recipes: {
+          some: {
+            ingredientId: { in: ingredientIds },
+          },
+        },
+      },
+      include: {
+        recipes: {
+          include: {
+            ingredient: true,
+          },
+        },
+      },
+    });
+
+    if (affectedProducts.length === 0) return [];
+
+    // 2. Lấy toàn bộ tồn kho hiện tại của các nguyên liệu xuất hiện trong các món trên
+    const allRecipeIngredientIds = Array.from(
+      new Set(
+        affectedProducts.flatMap((p) => p.recipes.map((r) => r.ingredientId)),
+      ),
+    );
+
+    const inventories = await this.prisma.inventory.findMany({
+      where: {
+        branchId,
+        ingredientId: { in: allRecipeIngredientIds },
+      },
+    });
+
+    const stockMap = new Map(
+      inventories.map((inv) => [inv.ingredientId, Number(inv.currentStock)]),
+    );
+
+    const updates: Array<{
+      productId: string;
+      productName: string;
+      isAvailable: boolean;
+      reason?: string;
+    }> = [];
+
+    // 3. Kiểm tra từng món ăn xem còn đủ nguyên liệu cho ít nhất 1 suất hay không
+    for (const product of affectedProducts) {
+      let lackingIngredient: { name: string; stock: number; needed: number; unit: string } | null = null;
+
+      for (const recipe of product.recipes) {
+        const currentStock = stockMap.get(recipe.ingredientId) ?? 0;
+        const needed = Number(recipe.amountNeeded);
+        if (currentStock <= 0 || currentStock < needed) {
+          lackingIngredient = {
+            name: recipe.ingredient.name,
+            stock: currentStock,
+            needed,
+            unit: recipe.ingredient.baseUnit,
+          };
+          break;
+        }
+      }
+
+      const shouldBeAvailable = lackingIngredient === null;
+
+      if (product.isAvailable !== shouldBeAvailable) {
+        await this.prisma.product.update({
+          where: { id: product.id },
+          data: { isAvailable: shouldBeAvailable },
+        });
+
+        const reason = shouldBeAvailable
+          ? 'Nguyên liệu đã được nhập bổ sung đủ định lượng'
+          : `Hết nguyên liệu "${lackingIngredient!.name}" (Còn ${lackingIngredient!.stock}${lackingIngredient!.unit}, cần ${lackingIngredient!.needed}${lackingIngredient!.unit})`;
+
+        if (shouldBeAvailable) {
+          this.logger.log(`✅ [AUTO-UNLOCK] Mở bán lại món "${product.name}"`);
+        } else {
+          this.logger.warn(`🚫 [AUTO-LOCK] ${reason} -> Tự động khóa món "${product.name}" (Hết hàng)`);
+        }
+
+        updates.push({
+          productId: product.id,
+          productName: product.name,
+          isAvailable: shouldBeAvailable,
+          reason,
+        });
+      }
+    }
+
+    if (updates.length > 0) {
+      this.eventsGateway.emitMenuAvailabilityUpdated({
+        branchId,
+        updates,
+      });
+    }
+
+    return updates;
+  }
 
   /** Lấy danh mục tất cả nguyên liệu */
   async getIngredients() {
@@ -104,7 +218,7 @@ export class InventoryService {
       throw new NotFoundException(`Chi nhánh với ID ${dto.branchId} không tồn tại`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const restockResult = await this.prisma.$transaction(async (tx) => {
       const results = [];
 
       for (const item of dto.items) {
@@ -177,6 +291,14 @@ export class InventoryService {
         restockedItems: results,
       };
     }, { maxWait: 10000, timeout: 25000 });
+
+    // Kiểm tra mở khóa lại các món ăn từng bị khóa "Hết hàng" nếu nguyên liệu đã đủ
+    await this.syncProductsAvailabilityForIngredients(
+      dto.branchId,
+      dto.items.map((i) => i.ingredientId),
+    );
+
+    return restockResult;
   }
 
   /** Cập nhật mức tồn kho an toàn */
@@ -397,7 +519,7 @@ export class InventoryService {
       };
     }, { maxWait: 10000, timeout: 25000 });
 
-    // Phát cảnh báo nguyên liệu chạm ngưỡng đỏ/vàng
+    // Phát cảnh báo nguyên liệu chạm ngưỡng đỏ/vàng & tự động khóa món nếu nguyên liệu về 0 / không đủ 1 suất
     if (result?.deductedDetails) {
       for (const item of result.deductedDetails) {
         if (item.remainingStock <= item.minSafetyStock) {
@@ -411,6 +533,11 @@ export class InventoryService {
           });
         }
       }
+
+      await this.syncProductsAvailabilityForIngredients(
+        branchId,
+        result.deductedDetails.map((d) => d.ingredientId),
+      );
     }
 
     return result;
@@ -632,7 +759,7 @@ export class InventoryService {
       };
     }, { maxWait: 10000, timeout: 25000 });
 
-    // Phát cảnh báo nguyên liệu chạm ngưỡng an toàn
+    // Phát cảnh báo nguyên liệu chạm ngưỡng an toàn & tự động khóa món nếu nguyên liệu về 0 / không đủ 1 suất
     if (result?.deductedDetails) {
       for (const item of result.deductedDetails) {
         if (item.remainingStock <= item.minSafetyStock) {
@@ -646,6 +773,11 @@ export class InventoryService {
           });
         }
       }
+
+      await this.syncProductsAvailabilityForIngredients(
+        branchId,
+        result.deductedDetails.map((d) => d.ingredientId),
+      );
     }
 
     return result;

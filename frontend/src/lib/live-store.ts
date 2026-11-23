@@ -65,24 +65,40 @@ function mapRawTablesToState(branchId: string, rawTables: any[]) {
 
     if (activeSession?.orders && Array.isArray(activeSession.orders)) {
       activeSession.orders.forEach((o: any, oIdx: number) => {
-        const mappedItems: OrderItem[] = (o.items || []).map((it: any) => ({
-          id: it.id,
-          menuItemId: it.productId || it.product?.id || '',
-          name: it.product?.name || 'Món ăn',
-          price: Number(it.price || 0),
-          quantity: it.quantity || 1,
-          station: (it.kitchenStationId || it.kitchenStation?.id || it.product?.kitchenStationId || 'hot').toLowerCase(),
-          selectedSize: it.selectedSize || undefined,
-          selectedSpicyLevel: it.selectedSpicyLevel || undefined,
-          selectedToppings: it.selectedToppings || [],
-          note: it.note || undefined,
-          status: (it.status || 'PENDING').toLowerCase() as OrderItemStatus,
-          orderedAt: it.createdAt || o.createdAt,
-          startedCookingAt: it.startedAt || undefined,
-          completedAt: it.completedAt || undefined,
-          orderCode: o.orderCode || `ORD-${o.id.slice(-4)}`,
-          batchIndex: oIdx + 1,
-        }));
+        const mappedItems: OrderItem[] = (o.items || []).map((it: any) => {
+          const modifierNames: string[] = Array.isArray(it.modifiers)
+            ? it.modifiers
+                .map((m: any) => m.itemModifier?.name)
+                .filter(Boolean)
+            : [];
+          const modifierExtra = Array.isArray(it.modifiers)
+            ? it.modifiers.reduce(
+                (sum: number, m: any) =>
+                  sum + Number(m.extraPrice ?? m.itemModifier?.extraPrice ?? 0) * (m.quantity || 1),
+                0,
+              )
+            : 0;
+
+          return {
+            id: it.id,
+            menuItemId: it.productId || it.product?.id || '',
+            name: it.product?.name || 'Món ăn',
+            price: Number(it.price || 0) + modifierExtra,
+            quantity: it.quantity || 1,
+            station: (it.kitchenStationId || it.kitchenStation?.id || it.product?.kitchenStationId || 'hot').toLowerCase(),
+            selectedSize: it.selectedSize || undefined,
+            selectedSpicyLevel: it.selectedSpicyLevel || undefined,
+            selectedToppings:
+              modifierNames.length > 0 ? modifierNames : (it.selectedToppings || []),
+            note: it.note || undefined,
+            status: (it.status || 'PENDING').toLowerCase() as OrderItemStatus,
+            orderedAt: it.createdAt || o.createdAt,
+            startedCookingAt: it.startedAt || undefined,
+            completedAt: it.completedAt || undefined,
+            orderCode: o.orderCode || `ORD-${o.id.slice(-4)}`,
+            batchIndex: oIdx + 1,
+          };
+        });
 
         const subtotal = mappedItems.reduce((s, item) => s + item.price * item.quantity, 0);
         const taxAmount = Math.round(subtotal * 0.08);
@@ -152,6 +168,10 @@ interface LiveStoreState {
   handleBatchItemsUpdated: (payload: any) => void;
   handlePaymentRequested: (payload: any) => void;
   handlePaymentCompleted: (payload: any) => void;
+  handleMenuAvailabilityUpdated: (payload: {
+    branchId?: string;
+    updates?: Array<{ productId: string; productName?: string; isAvailable: boolean; reason?: string }>;
+  }) => void;
 
   // Operations
   placeOrder: (payload: {
@@ -172,6 +192,7 @@ interface LiveStoreState {
   completeOrderTicket: (orderId: string, stationId?: string) => Promise<any>;
   addItemsToOrder: (tableIdOrOrderId: string, items: Array<{ menuItemId: string; quantity: number; note?: string }>) => Promise<any>;
   changeOrMergeTable: (fromTableId: string, toTableId: string, actionType: 'change' | 'merge') => Promise<void>;
+  splitTable: (fromTableId: string, toTableId: string, orderItemIds: string[]) => Promise<any>;
   requestPayment: (tableId: string) => Promise<PaymentRequest | null>;
   clearPaymentRequest: (tableId: string) => void;
   processPayment: (
@@ -250,6 +271,11 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
       socket.on('table:updated', (payload: any) => {
         get().debouncedFetchTables(get().currentBranchId);
       });
+
+      socket.on('menu:availability_updated', (payload: any) => {
+        console.log('⚡ Socket [menu:availability_updated]:', payload);
+        get().handleMenuAvailabilityUpdated(payload);
+      });
     }
   },
 
@@ -320,25 +346,46 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
       let menuItems = get().menuItems;
       const menuRes = await apiClient.get('/menu').catch(() => null);
       if (menuRes?.success && Array.isArray(menuRes.data)) {
-        menuItems = menuRes.data.map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          category: m.category?.id?.replace('cat-', '') || 'noodles',
-          station: m.kitchenStationId || m.kitchenStation?.id || 'hot',
-          price: Number(m.price),
-          description: m.description || '',
-          image: m.pictureLink || '',
-          isAvailable: m.isAvailable,
-          standardPrepMinutes: m.standardPrepMinutes || 15,
-          bom: m.recipes ? m.recipes.map((r: any) => ({ ingredientId: r.ingredientId, quantity: Number(r.amountNeeded) })) : [],
-          options: {
-            spicyLevels: ['Không cay', 'Cay vừa', 'Cay nồng'],
-            toppings: m.modifiers ? m.modifiers.flatMap((mg: any) => mg.modifierGroup?.items?.map((it: any) => ({
-              name: it.name,
-              price: Number(it.extraPrice),
-            })) || []) : [],
-          },
-        }));
+        menuItems = menuRes.data.map((m: any) => {
+          const allModGroups = Array.isArray(m.modifiers) ? m.modifiers : [];
+          const sizes: { id?: string; name: string; extraPrice: number }[] = [];
+          const spicyLevels: string[] = [];
+          const toppings: { id?: string; name: string; price: number }[] = [];
+
+          for (const mg of allModGroups) {
+            const groupName = (mg.modifierGroup?.name || '').toLowerCase();
+            const groupItems = mg.modifierGroup?.items || [];
+            if (groupName.includes('kích cỡ') || groupName.includes('size')) {
+              groupItems.forEach((it: any) =>
+                sizes.push({ id: it.id, name: it.name, extraPrice: Number(it.extraPrice) }),
+              );
+            } else if (groupName.includes('cay') || groupName.includes('đường')) {
+              groupItems.forEach((it: any) => spicyLevels.push(it.name));
+            } else {
+              groupItems.forEach((it: any) =>
+                toppings.push({ id: it.id, name: it.name, price: Number(it.extraPrice) }),
+              );
+            }
+          }
+
+          return {
+            id: m.id,
+            name: m.name,
+            category: m.category?.id?.replace('cat-', '') || 'noodles',
+            station: m.kitchenStationId || m.kitchenStation?.id || 'hot',
+            price: Number(m.price),
+            description: m.description || '',
+            image: m.pictureLink || '',
+            isAvailable: m.isAvailable,
+            standardPrepMinutes: m.standardPrepMinutes || 15,
+            bom: m.recipes ? m.recipes.map((r: any) => ({ ingredientId: r.ingredientId, quantity: Number(r.amountNeeded) })) : [],
+            options: {
+              ...(sizes.length > 0 ? { sizes } : {}),
+              ...(spicyLevels.length > 0 ? { spicyLevels } : {}),
+              ...(toppings.length > 0 ? { toppings } : {}),
+            },
+          };
+        });
       }
 
       // 4. Chỉ tải tồn kho nếu là nhân viên
@@ -413,24 +460,38 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
     const tableNumber = payload.tableNumber || rawOrder.orderSession?.table?.tableNumber || '';
     const branchId = payload.branchId || rawOrder.orderSession?.branchId || get().currentBranchId;
 
-    const mappedItems: OrderItem[] = (rawOrder.items || []).map((it: any, idx: number) => ({
-      id: it.id || `item-${Date.now()}-${idx}`,
-      menuItemId: it.productId || it.product?.id || '',
-      name: it.product?.name || 'Món ăn',
-      price: Number(it.price || 0),
-      quantity: it.quantity || 1,
-      station: (it.kitchenStationId || it.kitchenStation?.id || it.product?.kitchenStationId || 'hot').toLowerCase(),
-      selectedSize: it.selectedSize || undefined,
-      selectedSpicyLevel: it.selectedSpicyLevel || undefined,
-      selectedToppings: it.selectedToppings || [],
-      note: it.note || undefined,
-      status: (it.status || 'PENDING').toLowerCase() as OrderItemStatus,
-      orderedAt: it.createdAt || rawOrder.createdAt || new Date().toISOString(),
-      startedCookingAt: it.startedAt || undefined,
-      completedAt: it.completedAt || undefined,
-      orderCode: rawOrder.orderCode || payload.orderCode || `ORD-${rawOrder.id.slice(-4)}`,
-      batchIndex: 1,
-    }));
+    const mappedItems: OrderItem[] = (rawOrder.items || []).map((it: any, idx: number) => {
+      const modifierNames: string[] = Array.isArray(it.modifiers)
+        ? it.modifiers.map((m: any) => m.itemModifier?.name).filter(Boolean)
+        : [];
+      const modifierExtra = Array.isArray(it.modifiers)
+        ? it.modifiers.reduce(
+            (sum: number, m: any) =>
+              sum + Number(m.extraPrice ?? m.itemModifier?.extraPrice ?? 0) * (m.quantity || 1),
+            0,
+          )
+        : 0;
+
+      return {
+        id: it.id || `item-${Date.now()}-${idx}`,
+        menuItemId: it.productId || it.product?.id || '',
+        name: it.product?.name || 'Món ăn',
+        price: Number(it.price || 0) + modifierExtra,
+        quantity: it.quantity || 1,
+        station: (it.kitchenStationId || it.kitchenStation?.id || it.product?.kitchenStationId || 'hot').toLowerCase(),
+        selectedSize: it.selectedSize || undefined,
+        selectedSpicyLevel: it.selectedSpicyLevel || undefined,
+        selectedToppings:
+          modifierNames.length > 0 ? modifierNames : (it.selectedToppings || []),
+        note: it.note || undefined,
+        status: (it.status || 'PENDING').toLowerCase() as OrderItemStatus,
+        orderedAt: it.createdAt || rawOrder.createdAt || new Date().toISOString(),
+        startedCookingAt: it.startedAt || undefined,
+        completedAt: it.completedAt || undefined,
+        orderCode: rawOrder.orderCode || payload.orderCode || `ORD-${rawOrder.id.slice(-4)}`,
+        batchIndex: 1,
+      };
+    });
 
     const subtotal = mappedItems.reduce((s, item) => s + item.price * item.quantity, 0);
     const taxAmount = Math.round(subtotal * 0.08);
@@ -583,20 +644,54 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
     });
   },
 
+  /** Cập nhật trạng thái Hết hàng / Còn hàng Realtime trên E-Menu (0ms không cần reload) */
+  handleMenuAvailabilityUpdated: (payload) => {
+    if (!payload?.updates || !Array.isArray(payload.updates)) return;
+    const updateMap = new Map(
+      payload.updates.map((u) => [u.productId, u.isAvailable]),
+    );
+    set((state) => ({
+      menuItems: state.menuItems.map((m) =>
+        updateMap.has(m.id) ? { ...m, isAvailable: updateMap.get(m.id)! } : m,
+      ),
+    }));
+  },
+
   /** Đặt món mới (Khách hoặc POS) */
   placeOrder: async (payload) => {
     const table = get().tables.find((t) => t.id === payload.tableId || t.number === payload.tableId);
     if (!table) return null;
 
+    const allMenuItems = get().menuItems;
     const apiPayload = {
       tableId: table.id,
       guestCount: payload.guestCount || table.guestCount || 2,
-      items: payload.items.map((i) => ({
-        productId: i.menuItemId,
-        quantity: i.quantity,
-        note: i.note,
-        modifierIds: [],
-      })),
+      items: payload.items.map((i) => {
+        const menu = allMenuItems.find((m) => m.id === i.menuItemId);
+        const modifierIds: string[] = [];
+
+        if (i.selectedSize && menu?.options?.sizes) {
+          const matchedSize = menu.options.sizes.find((s) => s.name === i.selectedSize);
+          if (matchedSize?.id) modifierIds.push(matchedSize.id);
+        }
+        if (i.selectedToppings && i.selectedToppings.length > 0 && menu?.options?.toppings) {
+          for (const topName of i.selectedToppings) {
+            const matchedTop = menu.options.toppings.find((t) => t.name === topName);
+            if (matchedTop?.id) modifierIds.push(matchedTop.id);
+          }
+        }
+
+        const noteParts: string[] = [];
+        if (i.selectedSpicyLevel) noteParts.push(i.selectedSpicyLevel);
+        if (i.note) noteParts.push(i.note);
+
+        return {
+          productId: i.menuItemId,
+          quantity: i.quantity,
+          note: noteParts.length > 0 ? noteParts.join(' • ') : undefined,
+          modifierIds,
+        };
+      }),
     };
 
     try {
@@ -807,9 +902,24 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
       } else {
         await apiClient.post('/tables/merge', { fromTableId, toTableId });
       }
-      get().fetchTablesOnly(get().currentBranchId);
+      await get().fetchTablesOnly(get().currentBranchId);
     } catch (err: any) {
       console.warn('Lỗi chuyển/gộp bàn từ backend:', err.message);
+      throw err;
+    }
+  },
+
+  splitTable: async (fromTableId: string, toTableId: string, orderItemIds: string[]) => {
+    try {
+      const res = await apiClient.post('/tables/split', {
+        fromTableId,
+        toTableId,
+        orderItemIds,
+      });
+      await get().fetchTablesOnly(get().currentBranchId);
+      return res.data;
+    } catch (err: any) {
+      console.warn('Lỗi tách bàn từ backend:', err.message);
       throw err;
     }
   },
