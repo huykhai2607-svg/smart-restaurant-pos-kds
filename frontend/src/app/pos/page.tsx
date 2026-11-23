@@ -31,6 +31,7 @@ export default function POSCashierPage() {
     currentBranch,
     currentBranchTables,
     currentBranchOrders,
+    isSocketConnected,
     menuItems,
     addItemsToOrder,
     changeOrMergeTable,
@@ -228,9 +229,30 @@ export default function POSCashierPage() {
               <Monitor className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-sm font-black uppercase tracking-wider text-white">
-                POS - Bàn Thu Ngân
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-black uppercase tracking-wider text-white">
+                  POS - Bàn Thu Ngân
+                </h1>
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                    isSocketConnected
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : 'bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse'
+                  }`}
+                  title={
+                    isSocketConnected
+                      ? 'WebSocket đang kết nối trực tiếp'
+                      : 'Đang kết nối lại WebSocket...'
+                  }
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isSocketConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                    }`}
+                  />
+                  {isSocketConnected ? 'LIVE' : 'ĐANG NỐI LẠI'}
+                </span>
+              </div>
               <p className="text-xs text-slate-400 flex items-center gap-1.5">
                 <span className="text-blue-400 font-bold">{session?.name || 'Thu Ngân'}</span>
                 <span>•</span>

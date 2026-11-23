@@ -2,8 +2,22 @@
 
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+function resolveSocketUrl(): string {
+  const raw = (
+    process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000'
+  ).replace(/\/+$/, '');
+  // Tự động nâng cấp http:// -> https:// nếu trang đang chạy trên HTTPS (chống Mixed Content)
+  if (
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    raw.startsWith('http://') &&
+    !raw.includes('localhost') &&
+    !raw.includes('127.0.0.1')
+  ) {
+    return raw.replace(/^http:\/\//, 'https://');
+  }
+  return raw;
+}
 
 class SocketService {
   private socket: Socket | null = null;
@@ -11,12 +25,15 @@ class SocketService {
 
   public getSocket(): Socket {
     if (!this.socket && typeof window !== 'undefined') {
-      this.socket = io(SOCKET_URL, {
+      const socketUrl = resolveSocketUrl();
+      this.socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
         autoConnect: true,
         reconnection: true,
-        reconnectionAttempts: 10,
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
       });
 
       this.socket.on('connect', () => {

@@ -12,9 +12,13 @@ import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: true,
+    credentials: true,
   },
   namespace: '/',
+  transports: ['websocket', 'polling'],
+  pingInterval: 20000,
+  pingTimeout: 10000,
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()

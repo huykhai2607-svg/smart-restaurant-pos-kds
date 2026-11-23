@@ -8,10 +8,22 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  // Tin tưởng Reverse Proxy (Render / Railway / Vercel) để nhận diện đúng HTTPS (X-Forwarded-Proto)
+  const httpInstance = app.getHttpAdapter().getInstance();
+  if (typeof httpInstance?.set === 'function') {
+    httpInstance.set('trust proxy', 1);
+  }
+
   app.setGlobalPrefix('api');
 
-  const corsRaw = config.get<string>('CORS_ORIGIN', '*');
-  const origins = corsRaw === '*' ? '*' : corsRaw.split(',').map((o) => o.trim()).filter(Boolean);
+  const corsRaw = config.get<string>('CORS_ORIGIN', '*').trim();
+  const origins =
+    corsRaw === '*' || corsRaw === ''
+      ? true // Reflect request origin (tương thích credentials: true trên mọi thiết bị & Vercel Preview)
+      : corsRaw
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean);
   app.enableCors({ origin: origins, credentials: true });
 
   app.useGlobalPipes(

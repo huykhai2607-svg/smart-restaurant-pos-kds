@@ -1,5 +1,20 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+function resolveApiBaseUrl(): string {
+  const raw = (
+    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'
+  ).replace(/\/+$/, '');
+  if (
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    raw.startsWith('http://') &&
+    !raw.includes('localhost') &&
+    !raw.includes('127.0.0.1')
+  ) {
+    return raw.replace(/^http:\/\//, 'https://');
+  }
+  return raw;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -70,7 +85,7 @@ export async function apiRequest<T = any>(
   } catch (err: any) {
     // Nếu là network error không tới được server
     if (!err.status && err.message === 'Failed to fetch') {
-      err.message = 'Không thể kết nối tới máy chủ Backend (http://localhost:4000). Vui lòng kiểm tra lại dịch vụ!';
+      err.message = `Không thể kết nối tới máy chủ Backend (${API_BASE_URL}). Vui lòng kiểm tra lại kết nối mạng hoặc dịch vụ!`;
     }
     throw err;
   }

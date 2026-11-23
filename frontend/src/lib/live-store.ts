@@ -152,6 +152,7 @@ interface LiveStoreState {
   auditLogs: InventoryAuditLog[];
   paymentRequests: PaymentRequest[];
   isBackendConnected: boolean;
+  isSocketConnected: boolean;
   isInitialized: boolean;
 
   // Actions
@@ -219,6 +220,7 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
   auditLogs: [],
   paymentRequests: [],
   isBackendConnected: false,
+  isSocketConnected: false,
   isInitialized: false,
 
   init: () => {
@@ -235,6 +237,25 @@ export const useLiveStoreBase = create<LiveStoreState>((set, get) => ({
     if (typeof window !== 'undefined' && !isSocketSubscribed) {
       isSocketSubscribed = true;
       const socket = socketService.getSocket();
+      let hasConnectedOnce = socket.connected;
+      if (socket.connected) {
+        set({ isSocketConnected: true });
+      }
+
+      socket.on('connect', () => {
+        set({ isSocketConnected: true });
+        if (hasConnectedOnce) {
+          // Tự động đồng bộ lại trạng thái bàn & đơn sau khi mạng phục hồi
+          console.log('🔄 Socket reconnected -> đồng bộ lại dữ liệu chi nhánh');
+          get().fetchTablesOnly(get().currentBranchId);
+        }
+        hasConnectedOnce = true;
+      });
+
+      socket.on('disconnect', () => {
+        set({ isSocketConnected: false });
+      });
+
       socketService.joinBranch(storedBranchId);
       socketService.joinPos(storedBranchId);
       socketService.joinKitchen(storedBranchId, 'hot');

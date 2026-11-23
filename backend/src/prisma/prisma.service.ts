@@ -4,11 +4,19 @@ import { PrismaClient } from '@prisma/client';
 function resolveDatabaseUrl(): string | undefined {
   const rawUrl = process.env.DATABASE_URL;
   if (!rawUrl) return undefined;
-  if (rawUrl.includes(':6543') && !rawUrl.includes('pgbouncer=true')) {
-    const separator = rawUrl.includes('?') ? '&' : '?';
-    return `${rawUrl}${separator}pgbouncer=true`;
+  let resolved = rawUrl;
+  if (resolved.includes(':6543')) {
+    if (!resolved.includes('pgbouncer=true')) {
+      resolved += `${resolved.includes('?') ? '&' : '?'}pgbouncer=true`;
+    }
+    if (!resolved.includes('connection_limit=')) {
+      resolved += `${resolved.includes('?') ? '&' : '?'}connection_limit=10`;
+    }
+    if (!resolved.includes('pool_timeout=')) {
+      resolved += `${resolved.includes('?') ? '&' : '?'}pool_timeout=20`;
+    }
   }
-  return rawUrl;
+  return resolved;
 }
 
 @Injectable()
