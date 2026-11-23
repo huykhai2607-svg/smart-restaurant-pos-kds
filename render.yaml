@@ -24,4 +24,4 @@ services:
       - key: CORS_ORIGIN
         value: "*"
       - key: FRONTEND_URL
-        value: "http://localhost:3000"
+        value: "https://smart-restaurant-pos-kds.vercel.app"
