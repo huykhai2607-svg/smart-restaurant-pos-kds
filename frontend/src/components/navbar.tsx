@@ -12,12 +12,15 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useLiveStore } from '@/lib/live-store';
+import { useCurrentAuth } from '@/lib/auth-store';
 
 export function Navbar() {
   const pathname = usePathname();
+  const { session } = useCurrentAuth();
   const {
     branches,
     currentBranchId,
+    currentBranch,
     currentBranchTables,
     setBranch,
     activeOrdersCount,
@@ -79,21 +82,27 @@ export function Navbar() {
             </div>
           </Link>
 
-          {/* ĐIỂM MỚI 5: Multi-Branch Selector (Quản lý Đa Chi Nhánh) */}
+          {/* Hiển thị chi nhánh cố định nếu đã đăng nhập, chỉ cho chọn khi chưa đăng nhập */}
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200">
             <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="text-slate-400">Chi nhánh:</span>
-            <select
-              value={currentBranchId}
-              onChange={(e) => setBranch(e.target.value)}
-              className="bg-transparent text-slate-100 font-semibold focus:outline-none cursor-pointer pr-2"
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id} className="bg-slate-900 text-white">
-                  {b.name}
-                </option>
-              ))}
-            </select>
+            {session ? (
+              <span className="text-slate-100 font-semibold pr-1">
+                {session.branchName || currentBranch?.name}
+              </span>
+            ) : (
+              <select
+                value={currentBranchId}
+                onChange={(e) => setBranch(e.target.value)}
+                className="bg-transparent text-slate-100 font-semibold focus:outline-none cursor-pointer pr-2"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-slate-900 text-white">
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 

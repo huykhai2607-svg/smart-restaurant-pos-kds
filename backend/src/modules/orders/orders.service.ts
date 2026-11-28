@@ -52,7 +52,7 @@ export class OrdersService {
 
     // Nếu là nhân viên gọi món, kiểm tra quyền chi nhánh
     if (caller && !caller.isGuest && caller.user) {
-      if (caller.user.role !== Role.ADMIN && caller.user.branchId !== table.branchId) {
+      if (!caller.user.branchId || caller.user.branchId !== table.branchId) {
         throw new ForbiddenException('Bạn chỉ có quyền đặt món cho bàn thuộc chi nhánh mình');
       }
     }
@@ -229,9 +229,9 @@ export class OrdersService {
       throw new NotFoundException(`Món ăn với ID ${itemId} không tồn tại`);
     }
 
-    if (user && user.role !== Role.ADMIN) {
+    if (user) {
       const branchId = item.order.orderSession.table.branchId;
-      if (user.branchId !== branchId) {
+      if (!user.branchId || user.branchId !== branchId) {
         throw new ForbiddenException('Bạn chỉ có quyền cập nhật món thuộc chi nhánh của mình');
       }
     }
@@ -312,9 +312,9 @@ export class OrdersService {
       throw new NotFoundException(`Đơn hàng với ID ${orderId} không tồn tại`);
     }
 
-    if (user && user.role !== Role.ADMIN) {
+    if (user) {
       const branchId = order.orderSession.table.branchId;
-      if (user.branchId !== branchId) {
+      if (!user.branchId || user.branchId !== branchId) {
         throw new ForbiddenException('Bạn chỉ có quyền cập nhật đơn thuộc chi nhánh của mình');
       }
     }

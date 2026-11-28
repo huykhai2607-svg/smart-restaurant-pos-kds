@@ -169,7 +169,7 @@ export class TablesService {
       throw new BadRequestException('Chỉ có thể chuyển bàn trong cùng một chi nhánh');
     }
 
-    if (user.role !== Role.ADMIN && user.branchId !== fromTable.branchId) {
+    if (!user.branchId || user.branchId !== fromTable.branchId) {
       throw new ForbiddenException('Bạn chỉ có quyền quản lý bàn trong chi nhánh của mình');
     }
 
@@ -264,7 +264,7 @@ export class TablesService {
       throw new BadRequestException('Chỉ có thể gộp bàn trong cùng một chi nhánh');
     }
 
-    if (user.role !== Role.ADMIN && user.branchId !== fromTable.branchId) {
+    if (!user.branchId || user.branchId !== fromTable.branchId) {
       throw new ForbiddenException('Bạn chỉ có quyền quản lý bàn trong chi nhánh của mình');
     }
 
@@ -382,7 +382,7 @@ export class TablesService {
       throw new BadRequestException('Chỉ có thể tách bàn trong cùng một chi nhánh');
     }
 
-    if (user.role !== Role.ADMIN && user.branchId !== fromTable.branchId) {
+    if (!user.branchId || user.branchId !== fromTable.branchId) {
       throw new ForbiddenException('Bạn chỉ có quyền quản lý bàn trong chi nhánh của mình');
     }
 
@@ -511,7 +511,7 @@ export class TablesService {
     const table = await this.prisma.table.findUnique({ where: { id } });
     if (!table) throw new NotFoundException('Không tìm thấy bàn');
 
-    if (user.role !== Role.ADMIN && user.branchId !== table.branchId) {
+    if (!user.branchId || user.branchId !== table.branchId) {
       throw new ForbiddenException('Bạn chỉ có quyền quản trị bàn thuộc chi nhánh mình');
     }
 

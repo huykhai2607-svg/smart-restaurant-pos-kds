@@ -60,51 +60,95 @@ async function main() {
     }),
   ]);
 
-  // 2. TÀI KHOẢN NHÂN VIÊN & QUẢN LÝ (Accounts)
-  console.log('👤 Tạo tài khoản nhân viên...');
+  // 2. TÀI KHOẢN NHÂN VIÊN & QUẢN LÝ THEO VÙNG (9 tài khoản - 3 chi nhánh x 3 vai trò)
+  console.log('👤 Tạo 9 tài khoản nhân viên & quản lý theo vùng...');
   const defaultPassword = await bcrypt.hash('123456', 10);
 
   await prisma.account.createMany({
     data: [
+      // Chi nhánh 1 - TP.HCM
       {
-        username: 'admin',
-        email: 'admin@smartpos.vn',
+        id: 'acc-admin-hcm',
+        username: 'admin_hcm',
+        email: 'admin.hcm@smartpos.vn',
         password: defaultPassword,
-        fullName: 'Nguyễn Văn Minh (Quản Lý)',
+        fullName: 'Nguyễn Văn Minh (Quản Lý TP.HCM)',
         role: Role.ADMIN,
         branchId: 'branch-1',
       },
       {
-        username: 'cashier',
-        email: 'cashier@smartpos.vn',
+        id: 'acc-cashier-hcm',
+        username: 'cashier_hcm',
+        email: 'cashier.hcm@smartpos.vn',
         password: defaultPassword,
-        fullName: 'Trần Thị Thu (Thu Ngân)',
+        fullName: 'Trần Thị Thu (Thu Ngân TP.HCM)',
         role: Role.CASHIER,
         branchId: 'branch-1',
       },
       {
-        username: 'kitchen',
-        email: 'kitchen@smartpos.vn',
+        id: 'acc-kitchen-hcm',
+        username: 'kitchen_hcm',
+        email: 'kitchen.hcm@smartpos.vn',
         password: defaultPassword,
-        fullName: 'Đội Ngũ Bếp Trung Tâm',
+        fullName: 'Đội Ngũ Bếp TP.HCM',
         role: Role.COOK,
         branchId: 'branch-1',
       },
+      // Chi nhánh 2 - Hà Nội
       {
-        username: 'manager_hanoi',
-        email: 'manager.hn@smartpos.vn',
+        id: 'acc-admin-hn',
+        username: 'admin_hn',
+        email: 'admin.hn@smartpos.vn',
         password: defaultPassword,
         fullName: 'Phạm Thị Hạnh (Quản Lý Hà Nội)',
-        role: Role.MANAGER,
+        role: Role.ADMIN,
         branchId: 'branch-2',
       },
       {
-        username: 'cashier_hanoi',
+        id: 'acc-cashier-hn',
+        username: 'cashier_hn',
         email: 'cashier.hn@smartpos.vn',
         password: defaultPassword,
         fullName: 'Lê Minh Tuấn (Thu Ngân Hà Nội)',
         role: Role.CASHIER,
         branchId: 'branch-2',
+      },
+      {
+        id: 'acc-kitchen-hn',
+        username: 'kitchen_hn',
+        email: 'kitchen.hn@smartpos.vn',
+        password: defaultPassword,
+        fullName: 'Đội Ngũ Bếp Hà Nội',
+        role: Role.COOK,
+        branchId: 'branch-2',
+      },
+      // Chi nhánh 3 - Đà Nẵng
+      {
+        id: 'acc-admin-dn',
+        username: 'admin_dn',
+        email: 'admin.dn@smartpos.vn',
+        password: defaultPassword,
+        fullName: 'Nguyễn Thị Lan (Quản Lý Đà Nẵng)',
+        role: Role.ADMIN,
+        branchId: 'branch-3',
+      },
+      {
+        id: 'acc-cashier-dn',
+        username: 'cashier_dn',
+        email: 'cashier.dn@smartpos.vn',
+        password: defaultPassword,
+        fullName: 'Trần Quốc Huy (Thu Ngân Đà Nẵng)',
+        role: Role.CASHIER,
+        branchId: 'branch-3',
+      },
+      {
+        id: 'acc-kitchen-dn',
+        username: 'kitchen_dn',
+        email: 'kitchen.dn@smartpos.vn',
+        password: defaultPassword,
+        fullName: 'Đội Ngũ Bếp Đà Nẵng',
+        role: Role.COOK,
+        branchId: 'branch-3',
       },
     ],
   });
@@ -534,7 +578,261 @@ async function main() {
     },
   });
 
-  console.log('✅ Hoàn tất Seeding Database thành công 100%!');
+  // 9. DỮ LIỆU BÁN HÀNG, HÓA ĐƠN & NHẬT KÝ TRỪ KHO MẪU (Cho trang Thống kê giàu dữ liệu)
+  console.log('📊 Tạo dữ liệu hóa đơn bán hàng & nhật ký trừ kho mẫu cho 3 chi nhánh...');
+
+  const productMeta = new Map(
+    menuList.map((m) => [
+      m.id,
+      {
+        price: m.price,
+        stationId: m.kitchenStationId,
+        bom: m.bom,
+      },
+    ]),
+  );
+
+  const ingredientStockMap = new Map(
+    ingredientData.map((i) => [i.id, i.stock]),
+  );
+
+  type SeedSaleSpec = {
+    branchId: string;
+    tableId: string;
+    cashierId: string;
+    daysAgo: number;
+    hoursAgo: number;
+    guestCount: number;
+    paymentMethod: PaymentMethod;
+    discountPercent?: number;
+    items: Array<{ productId: string; quantity: number }>;
+  };
+
+  const sampleSales: SeedSaleSpec[] = [
+    // === CHI NHÁNH 1: TP.HCM (12 hóa đơn: 7 hôm nay + 5 trong 4 ngày qua) ===
+    {
+      branchId: 'branch-1', tableId: 'tbl-1', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 1, guestCount: 4, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-1', quantity: 2 }, { productId: 'menu-4', quantity: 1 }, { productId: 'menu-6', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-2', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 2, guestCount: 2, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-2', quantity: 2 }, { productId: 'menu-7', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-3', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 3, guestCount: 6, paymentMethod: PaymentMethod.CARD, discountPercent: 5,
+      items: [{ productId: 'menu-1', quantity: 3 }, { productId: 'menu-3', quantity: 2 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-8', quantity: 4 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-4', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 4, guestCount: 3, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-3', quantity: 2 }, { productId: 'menu-4', quantity: 1 }, { productId: 'menu-6', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-5', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 5, guestCount: 4, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-1', quantity: 2 }, { productId: 'menu-2', quantity: 2 }, { productId: 'menu-7', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-6', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 6, guestCount: 5, paymentMethod: PaymentMethod.CARD,
+      items: [{ productId: 'menu-4', quantity: 2 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-8', quantity: 3 }, { productId: 'menu-1', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-7', cashierId: 'acc-cashier-hcm', daysAgo: 0, hoursAgo: 7, guestCount: 2, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-2', quantity: 1 }, { productId: 'menu-3', quantity: 1 }, { productId: 'menu-6', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-8', cashierId: 'acc-cashier-hcm', daysAgo: 1, hoursAgo: 2, guestCount: 4, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-1', quantity: 4 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-6', quantity: 4 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-9', cashierId: 'acc-cashier-hcm', daysAgo: 1, hoursAgo: 5, guestCount: 6, paymentMethod: PaymentMethod.CARD, discountPercent: 10,
+      items: [{ productId: 'menu-1', quantity: 3 }, { productId: 'menu-2', quantity: 3 }, { productId: 'menu-4', quantity: 2 }, { productId: 'menu-8', quantity: 5 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-10', cashierId: 'acc-cashier-hcm', daysAgo: 2, hoursAgo: 3, guestCount: 4, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-3', quantity: 3 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-7', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-11', cashierId: 'acc-cashier-hcm', daysAgo: 3, hoursAgo: 4, guestCount: 4, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-1', quantity: 2 }, { productId: 'menu-4', quantity: 2 }, { productId: 'menu-8', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-1', tableId: 'tbl-12', cashierId: 'acc-cashier-hcm', daysAgo: 4, hoursAgo: 2, guestCount: 2, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-2', quantity: 2 }, { productId: 'menu-6', quantity: 2 }],
+    },
+
+    // === CHI NHÁNH 2: HÀ NỘI (8 hóa đơn: 5 hôm nay + 3 trong 3 ngày qua) ===
+    {
+      branchId: 'branch-2', tableId: 'tbl-13', cashierId: 'acc-cashier-hn', daysAgo: 0, hoursAgo: 1, guestCount: 4, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-2', quantity: 3 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-7', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-14', cashierId: 'acc-cashier-hn', daysAgo: 0, hoursAgo: 2, guestCount: 2, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-1', quantity: 2 }, { productId: 'menu-6', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-15', cashierId: 'acc-cashier-hn', daysAgo: 0, hoursAgo: 3, guestCount: 4, paymentMethod: PaymentMethod.CARD,
+      items: [{ productId: 'menu-3', quantity: 2 }, { productId: 'menu-4', quantity: 2 }, { productId: 'menu-8', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-16', cashierId: 'acc-cashier-hn', daysAgo: 0, hoursAgo: 5, guestCount: 3, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-2', quantity: 2 }, { productId: 'menu-1', quantity: 1 }, { productId: 'menu-7', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-17', cashierId: 'acc-cashier-hn', daysAgo: 0, hoursAgo: 6, guestCount: 5, paymentMethod: PaymentMethod.CASH, discountPercent: 5,
+      items: [{ productId: 'menu-2', quantity: 3 }, { productId: 'menu-3', quantity: 2 }, { productId: 'menu-6', quantity: 4 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-18', cashierId: 'acc-cashier-hn', daysAgo: 1, hoursAgo: 3, guestCount: 6, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-1', quantity: 3 }, { productId: 'menu-2', quantity: 2 }, { productId: 'menu-4', quantity: 2 }, { productId: 'menu-8', quantity: 4 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-19', cashierId: 'acc-cashier-hn', daysAgo: 2, hoursAgo: 4, guestCount: 4, paymentMethod: PaymentMethod.CARD,
+      items: [{ productId: 'menu-3', quantity: 2 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-7', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-2', tableId: 'tbl-20', cashierId: 'acc-cashier-hn', daysAgo: 3, hoursAgo: 2, guestCount: 3, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-2', quantity: 3 }, { productId: 'menu-6', quantity: 3 }],
+    },
+
+    // === CHI NHÁNH 3: ĐÀ NẴNG (6 hóa đơn: 4 hôm nay + 2 trong 2 ngày qua) ===
+    {
+      branchId: 'branch-3', tableId: 'tbl-23', cashierId: 'acc-cashier-dn', daysAgo: 0, hoursAgo: 1, guestCount: 4, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-3', quantity: 2 }, { productId: 'menu-4', quantity: 1 }, { productId: 'menu-6', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-3', tableId: 'tbl-24', cashierId: 'acc-cashier-dn', daysAgo: 0, hoursAgo: 3, guestCount: 2, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-1', quantity: 2 }, { productId: 'menu-7', quantity: 2 }],
+    },
+    {
+      branchId: 'branch-3', tableId: 'tbl-25', cashierId: 'acc-cashier-dn', daysAgo: 0, hoursAgo: 4, guestCount: 4, paymentMethod: PaymentMethod.CARD,
+      items: [{ productId: 'menu-2', quantity: 2 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-8', quantity: 3 }],
+    },
+    {
+      branchId: 'branch-3', tableId: 'tbl-26', cashierId: 'acc-cashier-dn', daysAgo: 0, hoursAgo: 6, guestCount: 5, paymentMethod: PaymentMethod.VIETQR,
+      items: [{ productId: 'menu-1', quantity: 2 }, { productId: 'menu-3', quantity: 2 }, { productId: 'menu-6', quantity: 4 }],
+    },
+    {
+      branchId: 'branch-3', tableId: 'tbl-27', cashierId: 'acc-cashier-dn', daysAgo: 1, hoursAgo: 3, guestCount: 6, paymentMethod: PaymentMethod.VIETQR, discountPercent: 5,
+      items: [{ productId: 'menu-1', quantity: 3 }, { productId: 'menu-4', quantity: 2 }, { productId: 'menu-5', quantity: 2 }, { productId: 'menu-8', quantity: 4 }],
+    },
+    {
+      branchId: 'branch-3', tableId: 'tbl-28', cashierId: 'acc-cashier-dn', daysAgo: 2, hoursAgo: 5, guestCount: 4, paymentMethod: PaymentMethod.CASH,
+      items: [{ productId: 'menu-2', quantity: 2 }, { productId: 'menu-3', quantity: 2 }, { productId: 'menu-7', quantity: 3 }],
+    },
+  ];
+
+  const nowMs = Date.now();
+  let saleSeq = 1;
+
+  for (const sale of sampleSales) {
+    const paidAt = new Date(
+      nowMs - sale.daysAgo * 24 * 60 * 60 * 1000 - sale.hoursAgo * 60 * 60 * 1000,
+    );
+    const openedAt = new Date(paidAt.getTime() - 45 * 60 * 1000);
+    const orderCreatedAt = new Date(openedAt.getTime() + 5 * 60 * 1000);
+    const completedAt = new Date(orderCreatedAt.getTime() + 12 * 60 * 1000);
+
+    const session = await prisma.orderSession.create({
+      data: {
+        tableId: sale.tableId,
+        branchId: sale.branchId,
+        guestCount: sale.guestCount,
+        status: SessionStatus.CLOSED,
+        openedAt,
+        closedAt: paidAt,
+        createdAt: openedAt,
+      },
+    });
+
+    const branchTag =
+      sale.branchId === 'branch-1' ? 'HCM' : sale.branchId === 'branch-2' ? 'HN' : 'DN';
+    const seqStr = String(saleSeq).padStart(3, '0');
+
+    const order = await prisma.order.create({
+      data: {
+        orderSessionId: session.id,
+        orderCode: `ORD-${branchTag}-${seqStr}`,
+        createdAt: orderCreatedAt,
+      },
+    });
+
+    let subtotal = 0;
+    const createdItems: Array<{ id: string; productId: string; quantity: number }> = [];
+
+    for (const it of sale.items) {
+      const meta = productMeta.get(it.productId)!;
+      subtotal += meta.price * it.quantity;
+
+      const createdItem = await prisma.orderItem.create({
+        data: {
+          orderId: order.id,
+          productId: it.productId,
+          kitchenStationId: meta.stationId,
+          price: meta.price,
+          quantity: it.quantity,
+          status: OrderItemStatus.SERVED,
+          startedAt: orderCreatedAt,
+          completedAt,
+          servedAt: completedAt,
+          createdAt: orderCreatedAt,
+        },
+      });
+      createdItems.push({ id: createdItem.id, productId: it.productId, quantity: it.quantity });
+    }
+
+    const discountPercent = sale.discountPercent ?? 0;
+    const discountAmount = Math.round((subtotal * discountPercent) / 100);
+    const taxable = subtotal - discountAmount;
+    const taxPercent = 8;
+    const taxAmount = Math.round((taxable * taxPercent) / 100);
+    const finalAmount = taxable + taxAmount;
+
+    await prisma.invoice.create({
+      data: {
+        orderSessionId: session.id,
+        branchId: sale.branchId,
+        accountId: sale.cashierId,
+        invoiceCode: `INV-${branchTag}-${seqStr}`,
+        subtotal,
+        discountPercent,
+        discountAmount,
+        taxPercent,
+        taxAmount,
+        finalAmount,
+        paymentMethod: sale.paymentMethod,
+        paymentStatus: PaymentStatus.PAID,
+        cashGiven: sale.paymentMethod === PaymentMethod.CASH ? finalAmount : null,
+        changeDue: sale.paymentMethod === PaymentMethod.CASH ? 0 : null,
+        paidAt,
+        createdAt: paidAt,
+      },
+    });
+
+    // Tạo nhật ký trừ kho mẫu cho các đơn trong ngày hôm nay (để Tab Audit Log có dữ liệu thật)
+    if (sale.daysAgo === 0 && createdItems.length > 0) {
+      const firstItem = createdItems[0];
+      const meta = productMeta.get(firstItem.productId)!;
+      for (const bomEntry of meta.bom.slice(0, 2)) {
+        const baseStock = ingredientStockMap.get(bomEntry.ingredientId) ?? 1000;
+        const remaining =
+          sale.branchId === 'branch-1' ? baseStock : Math.round(baseStock * 0.8);
+        await prisma.inventoryAuditLog.create({
+          data: {
+            branchId: sale.branchId,
+            ingredientId: bomEntry.ingredientId,
+            orderItemId: firstItem.id,
+            amountDeducted: bomEntry.quantity * firstItem.quantity,
+            remainingStock: remaining,
+            reason: `Tự động trừ kho BOM cho đơn ${order.orderCode} (${firstItem.quantity} suất)`,
+            createdAt: completedAt,
+          },
+        });
+      }
+    }
+
+    saleSeq++;
+  }
+
+  console.log(`✅ Hoàn tất Seeding Database thành công 100%! (${sampleSales.length} hóa đơn mẫu đã thanh toán)`);
 }
 
 main()

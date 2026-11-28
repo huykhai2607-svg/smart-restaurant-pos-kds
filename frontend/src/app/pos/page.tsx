@@ -28,6 +28,8 @@ export default function POSCashierPage() {
   const router = useRouter();
   const { session, isReady, logout } = useCurrentAuth();
   const {
+    currentBranchId,
+    setBranch,
     currentBranch,
     currentBranchTables,
     currentBranchOrders,
@@ -42,6 +44,13 @@ export default function POSCashierPage() {
     getTableActiveOrders,
     getTableConsolidatedOrder,
   } = useLiveStore();
+
+  // Tự động đồng bộ chi nhánh theo tài khoản đang đăng nhập
+  useEffect(() => {
+    if (session?.branchId && session.branchId !== currentBranchId) {
+      setBranch(session.branchId);
+    }
+  }, [session?.branchId, currentBranchId, setBranch]);
 
   const pendingPaymentRequests = currentBranchPaymentRequests.filter((request) => request.status !== 'paid');
 

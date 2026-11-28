@@ -133,8 +133,8 @@ export class OrdersController {
     @Query('stationId') stationId?: string,
     @Query('status') status?: OrderItemStatus,
   ) {
-    // Nếu nhân viên có branchId, ưu tiên chi nhánh của nhân viên
-    const effectiveBranchId = user.role === Role.ADMIN && branchId ? branchId : user.branchId || branchId;
+    // Luôn gắn cố định theo chi nhánh của tài khoản đăng nhập
+    const effectiveBranchId = user.branchId || branchId;
     if (!effectiveBranchId) {
       throw new UnauthorizedException('Vui lòng chỉ định branchId cho màn hình Bếp');
     }

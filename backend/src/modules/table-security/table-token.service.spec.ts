@@ -66,7 +66,7 @@ describe('TableTokenService', () => {
     });
   });
 
-  it('should forbid non-ADMIN staff from issuing QR for another branch', async () => {
+  it('should forbid staff (including ADMIN) from issuing QR for another branch', async () => {
     prisma.table.findUnique.mockResolvedValueOnce({
       id: 'tbl-2',
       branchId: 'branch-2',
@@ -77,8 +77,24 @@ describe('TableTokenService', () => {
     await expect(
       service.issueQr('tbl-2', {
         id: 'u1',
-        username: 'cashier',
+        username: 'cashier_hcm',
         role: Role.CASHIER,
+        branchId: 'branch-1',
+      }),
+    ).rejects.toThrow(ForbiddenException);
+
+    prisma.table.findUnique.mockResolvedValueOnce({
+      id: 'tbl-2',
+      branchId: 'branch-2',
+      tableNumber: 'T-02',
+      qrToken: 'nonce',
+    });
+
+    await expect(
+      service.issueQr('tbl-2', {
+        id: 'u2',
+        username: 'admin_hcm',
+        role: Role.ADMIN,
         branchId: 'branch-1',
       }),
     ).rejects.toThrow(ForbiddenException);

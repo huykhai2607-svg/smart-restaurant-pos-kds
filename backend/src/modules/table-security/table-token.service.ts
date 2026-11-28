@@ -29,7 +29,7 @@ export class TableTokenService {
     const table = await this.prisma.table.findUnique({ where: { id: tableId } });
     if (!table) throw new NotFoundException('Không tìm thấy bàn');
 
-    if (user.role !== Role.ADMIN && user.branchId !== table.branchId) {
+    if (!user.branchId || user.branchId !== table.branchId) {
       throw new ForbiddenException('Bạn chỉ được quản lý bàn thuộc chi nhánh của mình');
     }
 

@@ -24,12 +24,21 @@ export default function KitchenDisplayPage() {
   const router = useRouter();
   const { session, isReady, logout } = useCurrentAuth();
   const {
+    currentBranchId,
+    setBranch,
     currentBranch,
     currentBranchOrders,
     isSocketConnected,
     updateOrderItemStatus,
     completeOrderTicket,
   } = useLiveStore();
+
+  // Tự động đồng bộ chi nhánh theo tài khoản đang đăng nhập
+  useEffect(() => {
+    if (session?.branchId && session.branchId !== currentBranchId) {
+      setBranch(session.branchId);
+    }
+  }, [session?.branchId, currentBranchId, setBranch]);
 
   // Hệ thống tự chia trạm (Station Routing), đầu bếp có thể chọn xem trạm hoặc toàn bộ
   const [selectedStation, setSelectedStation] = useState<KitchenStation | 'all'>('all');

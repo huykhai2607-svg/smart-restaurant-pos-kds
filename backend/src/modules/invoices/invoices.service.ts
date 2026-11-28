@@ -46,7 +46,7 @@ export class InvoicesService {
       throw new NotFoundException(`Bàn ăn với ID ${dto.tableId} không tồn tại`);
     }
 
-    if (user && user.role !== Role.ADMIN && user.branchId !== table.branchId) {
+    if (user && (!user.branchId || user.branchId !== table.branchId)) {
       throw new ForbiddenException('Bạn chỉ có quyền in bill cho bàn thuộc chi nhánh mình');
     }
 
@@ -219,7 +219,7 @@ export class InvoicesService {
       throw new NotFoundException(`Hóa đơn với ID ${dto.invoiceId} không tồn tại`);
     }
 
-    if (user.role !== Role.ADMIN && user.branchId !== invoice.branchId) {
+    if (!user.branchId || user.branchId !== invoice.branchId) {
       throw new ForbiddenException('Bạn chỉ có quyền chốt hóa đơn thuộc chi nhánh mình');
     }
 

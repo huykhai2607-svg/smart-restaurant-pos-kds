@@ -26,7 +26,7 @@ function LoginContent() {
   const errorParam = searchParams.get('error');
 
   const { session, isReady, login, loginWithApi, logout } = useCurrentAuth();
-  const { branches, currentBranchId, setBranch, currentBranch } = useLiveStore();
+  const { setBranch } = useLiveStore();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +53,7 @@ function LoginContent() {
     }, 350);
   };
 
-  // Xử lý đăng nhập từ Form
+  // Xử lý đăng nhập từ Form (Chi nhánh tự động xác định theo tài khoản)
   const handleFormLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -66,31 +66,33 @@ function LoginContent() {
     }
 
     setIsLoggingIn(true);
-    const branchName = currentBranch?.name || 'Chi nhánh 1 - Quận 1 (Flagship)';
 
     try {
-      // 1. Kết nối Backend API thực tế
-      const sessionData = await loginWithApi(idClean, passClean, branchName);
+      // 1. Kết nối Backend API thực tế -> Tự động nhận branchId từ tài khoản
+      const sessionData = await loginWithApi(idClean, passClean);
+      setBranch(sessionData.branchId);
       navigateTo(getTargetRoute(sessionData.role));
     } catch (apiErr: any) {
       console.warn('Backend API login error:', apiErr?.message);
 
-      // 2. Fallback nếu Backend chưa bật hoặc offline: Thử tìm trong DEMO_STAFF_ACCOUNTS
+      // 2. Fallback nếu Backend chưa bật hoặc offline: Tìm trong 9 tài khoản DEMO_STAFF_ACCOUNTS
+      const lowerId = idClean.toLowerCase();
       const foundDemo = DEMO_STAFF_ACCOUNTS.find(
         (acc) =>
-          acc.email.toLowerCase() === idClean.toLowerCase() ||
-          acc.email.split('@')[0].toLowerCase() === idClean.toLowerCase()
+          acc.username.toLowerCase() === lowerId ||
+          acc.email.toLowerCase() === lowerId
       );
 
       if (foundDemo && passClean === foundDemo.password) {
         login({
-          id: `${foundDemo.role}-${foundDemo.email.split('@')[0]}`,
+          id: `${foundDemo.role}-${foundDemo.username}`,
           name: foundDemo.name,
           email: foundDemo.email,
           role: foundDemo.role,
-          branchId: currentBranchId || 'branch-1',
-          branchName,
+          branchId: foundDemo.branchId,
+          branchName: foundDemo.branchName,
         });
+        setBranch(foundDemo.branchId);
         navigateTo(foundDemo.targetRoute);
       } else {
         setErrorMsg(apiErr?.message || 'Tên đăng nhập hoặc mật khẩu không chính xác.');
@@ -159,6 +161,7 @@ function LoginContent() {
               <div className="truncate">
                 <p className="text-[10px] text-slate-400 font-medium">Đang đăng nhập:</p>
                 <p className="font-bold text-white truncate">{session.name}</p>
+                <p className="text-[10px] text-amber-400/90 truncate">{session.branchName}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -186,25 +189,6 @@ function LoginContent() {
 
         {/* Card chính */}
         <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 shadow-2xl">
-          {/* Branch Selector */}
-          <div className="mb-5">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>Chi Nhánh Làm Việc:</span>
-            </label>
-            <select
-              value={currentBranchId}
-              onChange={(e) => setBranch(e.target.value)}
-              className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-white focus:outline-none focus:border-amber-500/60 cursor-pointer transition-colors"
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id} className="bg-slate-900">
-                  {b.name} ({b.city})
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Login Form */}
           <form onSubmit={handleFormLogin} className="space-y-3.5">
             {errorMsg && (
