@@ -6,10 +6,6 @@ import {
   Lock,
   Building2,
   ShieldCheck,
-  ArrowRight,
-  Monitor,
-  ChefHat,
-  Warehouse,
   KeyRound,
   UtensilsCrossed,
   Eye,
@@ -23,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useCurrentAuth, DEMO_STAFF_ACCOUNTS } from '@/lib/auth-store';
 import { useLiveStore } from '@/lib/live-store';
-import { UserRole } from '@/lib/types';
 
 function LoginContent() {
   const router = useRouter();
@@ -33,12 +28,11 @@ function LoginContent() {
   const { session, isReady, login, loginWithApi, logout } = useCurrentAuth();
   const { branches, currentBranchId, setBranch, currentBranch } = useLiveStore();
 
-  const [identifier, setIdentifier] = useState('cashier');
-  const [password, setPassword] = useState('123456');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loadingRole, setLoadingRole] = useState<string | null>(null);
-  const isLoggingIn = Boolean(loadingRole);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Định tuyến đường dẫn theo vai trò thực tế
   const getTargetRoute = (role: string) => {
@@ -71,7 +65,7 @@ function LoginContent() {
       return;
     }
 
-    setLoadingRole('form');
+    setIsLoggingIn(true);
     const branchName = currentBranch?.name || 'Chi nhánh 1 - Quận 1 (Flagship)';
 
     try {
@@ -100,65 +94,9 @@ function LoginContent() {
         navigateTo(foundDemo.targetRoute);
       } else {
         setErrorMsg(apiErr?.message || 'Tên đăng nhập hoặc mật khẩu không chính xác.');
-        setLoadingRole(null);
+        setIsLoggingIn(false);
       }
     }
-  };
-
-  // Xử lý 1-Click Fast Login
-  const handleQuickLogin = async (role: UserRole) => {
-    const acc = DEMO_STAFF_ACCOUNTS.find((a) => a.role === role);
-    if (!acc) return;
-
-    setLoadingRole(role);
-    setErrorMsg('');
-    const branchName = currentBranch?.name || 'Chi nhánh 1 - Quận 1 (Flagship)';
-
-    try {
-      const sessionData = await loginWithApi(acc.email, acc.password, branchName);
-      navigateTo(getTargetRoute(sessionData.role));
-    } catch (err: any) {
-      console.warn('Backend API quick login fallback:', err?.message);
-      login({
-        id: `${acc.role}-${acc.email.split('@')[0]}`,
-        name: acc.name,
-        email: acc.email,
-        role: acc.role,
-        branchId: currentBranchId || 'branch-1',
-        branchName,
-      });
-      navigateTo(acc.targetRoute);
-    }
-  };
-
-  const roleIcons = {
-    cashier: Monitor,
-    cook: ChefHat,
-    admin: Warehouse,
-  };
-
-  const roleColors = {
-    cashier: {
-      icon: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
-      hover: 'hover:border-blue-500/60 hover:bg-blue-500/5',
-      text: 'group-hover:text-blue-400',
-      arrow: 'group-hover:text-blue-400',
-      badge: 'bg-blue-500/10 text-blue-400 border border-blue-500/30',
-    },
-    cook: {
-      icon: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
-      hover: 'hover:border-amber-500/60 hover:bg-amber-500/5',
-      text: 'group-hover:text-amber-400',
-      arrow: 'group-hover:text-amber-400',
-      badge: 'bg-amber-500/10 text-amber-400 border border-amber-500/30',
-    },
-    admin: {
-      icon: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
-      hover: 'hover:border-emerald-500/60 hover:bg-emerald-500/5',
-      text: 'group-hover:text-emerald-400',
-      arrow: 'group-hover:text-emerald-400',
-      badge: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30',
-    },
   };
 
   return (
@@ -199,7 +137,7 @@ function LoginContent() {
             Cổng Đăng Nhập Nội Bộ
           </h1>
           <p className="text-xs text-slate-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-            Chọn hoặc nhập tài khoản phân quyền RBAC: Thu Ngân, Bếp hoặc Quản Trị
+            Đăng nhập tài khoản phân quyền RBAC: Thu Ngân, Bếp hoặc Quản Trị
           </p>
         </div>
 
@@ -207,7 +145,7 @@ function LoginContent() {
         {errorParam === 'forbidden' && (
           <div className="mb-4 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span>Tài khoản hiện tại không có quyền vào khu vực đó. Vui lòng chọn đúng vai trò tương ứng bên dưới.</span>
+            <span>Tài khoản hiện tại không có quyền vào khu vực đó. Vui lòng đăng nhập bằng tài khoản có vai trò phù hợp.</span>
           </div>
         )}
 
@@ -267,73 +205,6 @@ function LoginContent() {
             </select>
           </div>
 
-          {/* Quick Role Login (1-Click) */}
-          <div className="mb-5">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2.5">
-              Đăng Nhập Nhanh Theo Vai Trò (1-Click):
-            </label>
-            <div className="space-y-2.5">
-              {DEMO_STAFF_ACCOUNTS.map((acc) => {
-                const Icon = roleIcons[acc.role as keyof typeof roleIcons] || Monitor;
-                const colors = roleColors[acc.role as keyof typeof roleColors];
-                const routeBadge: Record<string, string> = {
-                  cashier: '/pos',
-                  cook: '/kds',
-                  admin: '/admin',
-                };
-
-                return (
-                  <button
-                    key={acc.role}
-                    type="button"
-                    disabled={isLoggingIn}
-                    onClick={() => handleQuickLogin(acc.role as UserRole)}
-                    className={`w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 ${colors.hover} flex items-center justify-between transition-all group cursor-pointer text-left disabled:opacity-60`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${colors.icon}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div className="truncate">
-                        <strong className={`text-xs text-white block transition-colors ${colors.text}`}>
-                          {acc.roleTitle}
-                        </strong>
-                        <span className="text-[10px] text-slate-500 block truncate">
-                          {acc.description}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {loadingRole === acc.role ? (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-400 text-[10px] font-bold">
-                          <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                          <span>Đang vào...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg ${colors.badge}`}>
-                            {routeBadge[acc.role]}
-                          </span>
-                          <ArrowRight className={`w-4 h-4 text-slate-600 ${colors.arrow} group-hover:translate-x-0.5 transition-all`} />
-                        </>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-800" />
-            </div>
-            <div className="relative flex justify-center text-[10px] uppercase">
-              <span className="bg-slate-900 px-3 text-slate-500 font-bold tracking-wider">hoặc nhập tài khoản</span>
-            </div>
-          </div>
-
           {/* Login Form */}
           <form onSubmit={handleFormLogin} className="space-y-3.5">
             {errorMsg && (
@@ -351,7 +222,7 @@ function LoginContent() {
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="cashier hoặc cashier@smartpos.vn"
+                placeholder="Nhập tên đăng nhập hoặc email"
                 className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
                 required
                 autoComplete="username"
@@ -360,7 +231,7 @@ function LoginContent() {
 
             <div>
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                Mật Khẩu <span className="text-slate-600 normal-case font-normal">(demo: 123456)</span>
+                Mật Khẩu
               </label>
               <div className="relative">
                 <input
